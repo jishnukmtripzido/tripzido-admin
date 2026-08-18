@@ -1,26 +1,173 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800;900&family=Nunito+Sans:wght@400;500;600;700;800;900&display=swap");
+/* @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800;900&family=Nunito+Sans:wght@400;500;600;700;800;900&family=Lato:wght@400;700;900&family=Open+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800;900&family=Arimo:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800;900&family=Archivo+Black&family=Rubik:wght@400;500;600;700;800;900&family=Roboto+Slab:wght@400;500;600;700;800;900&family=Ubuntu:wght@400;500;700&display=swap"); */
+
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ── Brand theme (Tailwind v4 config lives here, not in tailwind.config.ts) ── */
+@theme {
+  --color-brand-yellow-lg: #ffc107;
+  --color-brand-yellow: #fed250;
+  --color-font-main-sub: #1a1a1a;
+  --color-font-dim: #595959;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* --color-banner-from: #e8234a;
+  --color-banner-to: #c0176e; */
+  --color-banner-from: #fed250;
+  --color-banner-to: #ffc107;
+  --color-brand-secondary: #111111;
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  /* --font-heading: "Nunito", "Inter", sans-serif; */
+  --font-heading:
+    "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --animate-dropdown-in: dropdown-in 0.15s ease-out forwards;
+  --animate-fade-in: fade-in 0.2s ease-out forwards;
+  --animate-slide-up: slide-up 0.25s ease-out forwards;
+  --animate-scale-in: scale-in 0.2s ease-out forwards;
+
+  @keyframes dropdown-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── Carousel: hide scrollbar cross-browser ── */
+.hide-scrollbar {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Backdrop */
+.modal-backdrop {
+  transition: opacity 200ms ease;
+}
+.modal-backdrop-enter {
+  opacity: 0;
+}
+.modal-backdrop-entered {
+  opacity: 1;
+}
+.modal-backdrop-exit {
+  opacity: 0;
+}
+
+/* Panel — slides up on mobile, scales on desktop */
+.modal-panel {
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+}
+.modal-panel-enter {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.modal-panel-entered {
+  opacity: 1;
+  transform: translateY(0);
+}
+.modal-panel-exit {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+@media (min-width: 640px) {
+  .modal-panel-enter {
+    opacity: 0;
+    transform: scale(0.96) translateY(0);
+  }
+  .modal-panel-entered {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  .modal-panel-exit {
+    opacity: 0;
+    transform: scale(0.96) translateY(0);
+  }
+}
+
+/*
+  ── Sidebar thin scrollbar ─────────────────────────────────────────────
+  Applied to .sidebar-scroll (the filter sidebar in sticky-columns mode).
+  Webkit: thin, rounded, brand-yellow thumb.
+  Firefox: thin keyword + matching colors.
+  Only visible on lg+ screens where the sidebar scrolls independently.
+*/
+
+.sidebar-scroll {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 999px;
+  transition: background-color 0.2s;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: #fed250;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #fed250;
+}
+
+@layer utilities {
+  .shadow-header {
+    box-shadow:
+      rgba(50, 50, 93, 0.25) 0px 13px 27px -5px,
+      rgba(0, 0, 0, 0.3) 0px 8px 16px -8px;
+  }
 }

@@ -16,6 +16,7 @@ const NAV_SECTIONS = [
       { href: "/vendors/approvals", label: "Approvals" },
       { href: "/vendors/commissions", label: "Commission Structures" },
       { href: "/vendors/subscription-plans", label: "Subscription Plans" },
+      { href: "/vendors/new", label: "Register Vendor" },
     ],
   },
   {

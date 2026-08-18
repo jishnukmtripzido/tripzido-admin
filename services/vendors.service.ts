@@ -161,3 +161,19 @@ export async function deleteSubscriptionPlanApi(
 ): Promise<ApiResponse<null>> {
   return api.delete(`/api/vendors/admin/subscription-plans/${id}/`, { token });
 }
+
+export async function registerVendorApi(
+  token: string,
+  data: {
+    phone_number: string;
+    phone_country_code: string;
+    email: string;
+    password: string;
+    business_name: string;
+    owner_name: string;
+    address: string;
+    gst_number: string;
+  },
+): Promise<ApiResponse<VendorDetail>> {
+  return api.post(`/api/vendors/admin/register/`, data, { token });
+}

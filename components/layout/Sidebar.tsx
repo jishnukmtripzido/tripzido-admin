@@ -61,6 +61,7 @@ const NAV_SECTIONS = [
       { href: "/bookings", label: "Bookings" },
       { href: "/payments", label: "Payments" },
       { href: "/payments/payouts", label: "Vendor Payouts" },
+      { href: "/refunds", label: "Refunds" },
     ],
   },
   {

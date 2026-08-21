@@ -6,6 +6,7 @@ import {
   getStaffApi,
   createStaffApi,
   removeStaffApi,
+  resetStaffPasswordApi,
 } from "@/services/users-admin.service";
 import type { StaffMember } from "@/types/users-admin.types";
 import { PageLoader } from "@/components/ui/PageLoader";
@@ -19,6 +20,7 @@ export default function StaffPage() {
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [resetTarget, setResetTarget] = useState<StaffMember | null>(null);
 
   async function load() {
     if (!token) return;
@@ -91,15 +93,23 @@ export default function StaffPage() {
                 {s.phone_number} • {s.email || "no email"}
               </p>
             </div>
-            <button
-              onClick={() => {
-                setRemoveTarget(s);
-                setRemoveError(null);
-              }}
-              className="text-xs font-bold text-red-500 shrink-0"
-            >
-              Remove
-            </button>
+            <div className="flex gap-3 shrink-0">
+              <button
+                onClick={() => setResetTarget(s)}
+                className="text-xs font-bold text-brand-yellow-lg"
+              >
+                Reset password
+              </button>
+              <button
+                onClick={() => {
+                  setRemoveTarget(s);
+                  setRemoveError(null);
+                }}
+                className="text-xs font-bold text-red-500"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ))}
         {items.length === 0 && (
@@ -116,6 +126,14 @@ export default function StaffPage() {
             setItems((prev) => [staff, ...prev]);
             setShowForm(false);
           }}
+          token={token!}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetPasswordModal
+          staff={resetTarget}
+          onClose={() => setResetTarget(null)}
           token={token!}
         />
       )}
@@ -157,21 +175,28 @@ function StaffFormModal({
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
-    const res = await createStaffApi(token, {
-      phone_number: phoneNumber,
-      phone_country_code: "+91",
-      email,
-      password,
-      first_name: firstName,
-      last_name: lastName,
-      role,
-    });
-    if (!res.success || !res.data) {
-      setError(res.message || "Failed to create staff member");
+    try {
+      const res = await createStaffApi(token, {
+        phone_number: phoneNumber,
+        phone_country_code: "+91",
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        role,
+      });
+      if (!res.success || !res.data) {
+        setError(res.message || "Failed to create staff member");
+        return;
+      }
+      onCreated(res.data);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to create staff member",
+      );
+    } finally {
       setSubmitting(false);
-      return;
     }
-    onCreated(res.data);
   }
 
   return (
@@ -243,6 +268,112 @@ function StaffFormModal({
             {submitting ? "Creating..." : "Create"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordModal({
+  staff,
+  onClose,
+  token,
+}: {
+  staff: StaffMember;
+  onClose: () => void;
+  token: string;
+}) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const canSubmit = newPassword.length >= 8 && newPassword === confirmPassword;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await resetStaffPasswordApi(
+        token,
+        staff.user_id,
+        newPassword,
+      );
+      if (!res.success) {
+        setError(res.message || "Failed to reset password");
+        return;
+      }
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset password");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">
+          Reset password for {staff.full_name}
+        </h3>
+
+        {success ? (
+          <>
+            <p className="text-sm text-green-600 font-medium">
+              Password updated successfully.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary"
+            >
+              Done
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New password (min 8 characters)"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+            />
+            {confirmPassword.length > 0 && newPassword !== confirmPassword && (
+              <p className="text-xs text-red-500">
+                Passwords don&rsquo;t match.
+              </p>
+            )}
+            {error && (
+              <p className="text-sm text-red-500 font-medium">{error}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                disabled={submitting}
+                className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !canSubmit}
+                className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+              >
+                {submitting ? "Saving..." : "Reset Password"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

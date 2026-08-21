@@ -144,3 +144,13 @@ export interface ApiResponse<T> {
   data?: T;
   errors?: Record<string, string[]> | string;
 }
+
+export interface VendorTeamMember {
+  id: number;
+  user_id: number;
+  full_name: string;
+  phone_number: string;
+  email: string | null;
+  added_at: string;
+  added_by_name: string | null;
+}

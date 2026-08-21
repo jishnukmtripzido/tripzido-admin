@@ -61,3 +61,15 @@ export async function removeStaffApi(
 ): Promise<ApiResponse<null>> {
   return api.delete(`/api/users/admin/staff/${assignmentId}/`, { token });
 }
+
+export async function resetStaffPasswordApi(
+  token: string,
+  userId: number,
+  newPassword: string,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/users/admin/staff/${userId}/password/`,
+    { new_password: newPassword },
+    { token },
+  );
+}

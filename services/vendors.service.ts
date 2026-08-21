@@ -9,6 +9,7 @@ import type {
   VendorSubscriptionRecord,
   PaginatedResponse,
   ApiResponse,
+  VendorTeamMember,
 } from "@/types/vendor.types";
 
 export async function getVendorsApi(
@@ -176,4 +177,33 @@ export async function registerVendorApi(
   },
 ): Promise<ApiResponse<VendorDetail>> {
   return api.post(`/api/vendors/admin/register/`, data, { token });
+}
+
+export async function getVendorTeamApi(
+  token: string,
+  vendorId: number,
+): Promise<ApiResponse<VendorTeamMember[]>> {
+  return api.get(`/api/vendors/admin/vendors/${vendorId}/team/`, { token });
+}
+export async function addVendorTeamMemberApi(
+  token: string,
+  vendorId: number,
+  data: {
+    phone_number: string;
+    phone_country_code: string;
+    email: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+  },
+): Promise<ApiResponse<VendorTeamMember>> {
+  return api.post(`/api/vendors/admin/vendors/${vendorId}/team/`, data, {
+    token,
+  });
+}
+export async function removeVendorTeamMemberApi(
+  token: string,
+  memberId: number,
+): Promise<ApiResponse<null>> {
+  return api.delete(`/api/vendors/admin/team/${memberId}/`, { token });
 }

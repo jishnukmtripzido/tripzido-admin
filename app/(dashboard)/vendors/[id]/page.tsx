@@ -13,6 +13,9 @@ import {
   getSubscriptionPlansApi,
   getVendorSubscriptionsApi,
   assignVendorSubscriptionApi,
+  getVendorTeamApi,
+  addVendorTeamMemberApi,
+  removeVendorTeamMemberApi,
 } from "@/services/vendors.service";
 import type {
   VendorDetail,
@@ -20,8 +23,10 @@ import type {
   VendorBankAccount,
   SubscriptionPlan,
   VendorSubscriptionRecord,
+  VendorTeamMember,
 } from "@/types/vendor.types";
 import { PageLoader } from "@/components/ui/PageLoader";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   PENDING: ["APPROVED", "REJECTED"],
@@ -148,6 +153,7 @@ export default function VendorDetailPage() {
         token={token!}
         onUpdated={setVendor}
       />
+      <TeamSection vendorId={vendor.id} token={token!} />
     </div>
   );
 }
@@ -160,6 +166,8 @@ function Field({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+// ── Status actions ──────────────────────────────────────────────────────
 
 function StatusActions({
   vendor,
@@ -242,7 +250,7 @@ function StatusActions({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
-                placeholder="Reason"
+                placeholder="Reason (visible to the vendor where applicable)"
                 className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm resize-none"
               />
             )}
@@ -271,6 +279,8 @@ function StatusActions({
     </>
   );
 }
+
+// ── Documents ─────────────────────────────────────────────────────────
 
 function DocumentsSection({
   vendorId,
@@ -450,6 +460,8 @@ function DocumentRow({
   );
 }
 
+// ── Bank accounts ─────────────────────────────────────────────────────
+
 function BankAccountsSection({
   vendorId,
   token,
@@ -628,6 +640,8 @@ function BankAccountRow({
   );
 }
 
+// ── Subscription ──────────────────────────────────────────────────────
+
 function SubscriptionSection({
   vendor,
   token,
@@ -781,6 +795,232 @@ function SubscriptionSection({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Team ─────────────────────────────────────────────────────────────
+
+function TeamSection({ vendorId, token }: { vendorId: number; token: string }) {
+  const [members, setMembers] = useState<VendorTeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<VendorTeamMember | null>(
+    null,
+  );
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await getVendorTeamApi(token, vendorId);
+    if (res.success && res.data) setMembers(res.data);
+    setLoading(false);
+  }, [token, vendorId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleRemove() {
+    if (!removeTarget) return;
+    setRemoving(true);
+    setRemoveError(null);
+    const res = await removeVendorTeamMemberApi(token, removeTarget.id);
+    if (!res.success) {
+      setRemoveError(res.message || "Failed to remove");
+      setRemoving(false);
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.id !== removeTarget.id));
+    setRemoveTarget(null);
+    setRemoving(false);
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-heading font-bold text-sm">
+          Team ({members.length})
+        </h2>
+        <button
+          onClick={() => setShowForm(true)}
+          className="text-xs font-bold text-brand-yellow-lg"
+        >
+          + Add member
+        </button>
+      </div>
+      <p className="text-xs text-font-dim mb-3">
+        Additional logins that share full access to this vendor&rsquo;s fleet,
+        bookings, and payouts — separate from the primary owner account.
+      </p>
+
+      {loading ? (
+        <p className="text-sm text-font-dim">Loading...</p>
+      ) : members.length === 0 ? (
+        <p className="text-sm text-font-dim">No additional team members yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {members.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center justify-between border border-gray-100 rounded-xl p-3"
+            >
+              <div>
+                <p className="text-sm font-semibold">{m.full_name}</p>
+                <p className="text-xs text-font-dim">
+                  {m.phone_number} • {m.email || "no email"}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setRemoveTarget(m);
+                  setRemoveError(null);
+                }}
+                className="text-xs font-bold text-red-500"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <TeamMemberFormModal
+          vendorId={vendorId}
+          token={token}
+          onClose={() => setShowForm(false)}
+          onAdded={(m) => {
+            setMembers((prev) => [m, ...prev]);
+            setShowForm(false);
+          }}
+        />
+      )}
+
+      {removeTarget && (
+        <ConfirmDialog
+          title="Remove this team member?"
+          message={`${removeTarget.full_name} will no longer be able to log into the vendor portal for this business.`}
+          confirmLabel="Remove"
+          destructive
+          submitting={removing}
+          error={removeError}
+          onCancel={() => setRemoveTarget(null)}
+          onConfirm={handleRemove}
+        />
+      )}
+    </div>
+  );
+}
+
+function TeamMemberFormModal({
+  vendorId,
+  token,
+  onClose,
+  onAdded,
+}: {
+  vendorId: number;
+  token: string;
+  onClose: () => void;
+  onAdded: (m: VendorTeamMember) => void;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await addVendorTeamMemberApi(token, vendorId, {
+        phone_number: phoneNumber,
+        phone_country_code: "+91",
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+      });
+      if (!res.success || !res.data) {
+        setError(res.message || "Failed to add team member");
+        return;
+      }
+      onAdded(res.data);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to add team member",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">New team member</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="First name"
+            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+          />
+          <input
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Last name"
+            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+          />
+        </div>
+        <input
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
+          placeholder="Phone number"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password (min 8 characters)"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={
+              submitting ||
+              !phoneNumber.trim() ||
+              !email.trim() ||
+              password.length < 8
+            }
+            className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+          >
+            {submitting ? "Adding..." : "Add"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

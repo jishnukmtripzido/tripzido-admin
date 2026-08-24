@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { staffLoginApi } from "@/services/auth.service";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
@@ -78,6 +79,15 @@ export default function LoginPage() {
               className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-yellow"
             />
           </div>
+        </div>
+
+        <div className="flex justify-end mt-2">
+          <Link
+            href="/forgot-password"
+            className="text-xs font-semibold text-brand-yellow-lg hover:underline"
+          >
+            Forgot password?
+          </Link>
         </div>
 
         {error && (

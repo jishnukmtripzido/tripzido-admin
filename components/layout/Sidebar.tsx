@@ -56,6 +56,10 @@ const NAV_SECTIONS = [
     ],
   },
   {
+    label: "Reviews",
+    links: [{ href: "/reviews", label: "Reviews" }],
+  },
+  {
     label: "Operations",
     links: [
       { href: "/bookings", label: "Bookings" },

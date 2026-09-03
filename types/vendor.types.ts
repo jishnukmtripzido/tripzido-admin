@@ -153,4 +153,5 @@ export interface VendorTeamMember {
   email: string | null;
   added_at: string;
   added_by_name: string | null;
+  is_active: boolean;
 }

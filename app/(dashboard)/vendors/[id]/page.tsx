@@ -16,6 +16,8 @@ import {
   getVendorTeamApi,
   addVendorTeamMemberApi,
   removeVendorTeamMemberApi,
+  deactivateVendorTeamMemberApi,
+  restoreVendorTeamMemberApi,
 } from "@/services/vendors.service";
 import type {
   VendorDetail,
@@ -805,11 +807,13 @@ function TeamSection({ vendorId, token }: { vendorId: number; token: string }) {
   const [members, setMembers] = useState<VendorTeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<VendorTeamMember | null>(
-    null,
-  );
-  const [removing, setRemoving] = useState(false);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  const [actionTarget, setActionTarget] = useState<{
+    member: VendorTeamMember;
+    action: "deactivate" | "restore" | "delete";
+  } | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -822,19 +826,45 @@ function TeamSection({ vendorId, token }: { vendorId: number; token: string }) {
     load();
   }, [load]);
 
-  async function handleRemove() {
-    if (!removeTarget) return;
-    setRemoving(true);
-    setRemoveError(null);
-    const res = await removeVendorTeamMemberApi(token, removeTarget.id);
-    if (!res.success) {
-      setRemoveError(res.message || "Failed to remove");
-      setRemoving(false);
-      return;
+  async function handleConfirmAction() {
+    if (!actionTarget) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      let res;
+      if (actionTarget.action === "deactivate") {
+        res = await deactivateVendorTeamMemberApi(
+          token,
+          actionTarget.member.id,
+        );
+      } else if (actionTarget.action === "restore") {
+        res = await restoreVendorTeamMemberApi(token, actionTarget.member.id);
+      } else {
+        res = await removeVendorTeamMemberApi(token, actionTarget.member.id);
+      }
+      if (!res.success) {
+        setActionError(res.message || "Action failed");
+        return;
+      }
+      if (actionTarget.action === "delete") {
+        setMembers((prev) =>
+          prev.filter((m) => m.id !== actionTarget.member.id),
+        );
+      } else {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === actionTarget.member.id
+              ? { ...m, is_active: actionTarget.action === "restore" }
+              : m,
+          ),
+        );
+      }
+      setActionTarget(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActionSubmitting(false);
     }
-    setMembers((prev) => prev.filter((m) => m.id !== removeTarget.id));
-    setRemoveTarget(null);
-    setRemoving(false);
   }
 
   return (
@@ -852,7 +882,7 @@ function TeamSection({ vendorId, token }: { vendorId: number; token: string }) {
       </div>
       <p className="text-xs text-font-dim mb-3">
         Additional logins that share full access to this vendor&rsquo;s fleet,
-        bookings, and payouts — separate from the primary owner account.
+        bookings, and payouts.
       </p>
 
       {loading ? (
@@ -867,20 +897,50 @@ function TeamSection({ vendorId, token }: { vendorId: number; token: string }) {
               className="flex items-center justify-between border border-gray-100 rounded-xl p-3"
             >
               <div>
-                <p className="text-sm font-semibold">{m.full_name}</p>
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  {m.full_name}
+                  {!m.is_active && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                      Inactive
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-font-dim">
                   {m.phone_number} • {m.email || "no email"}
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setRemoveTarget(m);
-                  setRemoveError(null);
-                }}
-                className="text-xs font-bold text-red-500"
-              >
-                Remove
-              </button>
+              <div className="flex gap-3 shrink-0">
+                {m.is_active ? (
+                  <button
+                    onClick={() => {
+                      setActionTarget({ member: m, action: "deactivate" });
+                      setActionError(null);
+                    }}
+                    className="text-xs font-bold text-orange-600"
+                  >
+                    Deactivate
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setActionTarget({ member: m, action: "restore" });
+                      setActionError(null);
+                    }}
+                    className="text-xs font-bold text-green-600"
+                  >
+                    Activate
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setActionTarget({ member: m, action: "delete" });
+                    setActionError(null);
+                  }}
+                  className="text-xs font-bold text-red-500"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -898,16 +958,34 @@ function TeamSection({ vendorId, token }: { vendorId: number; token: string }) {
         />
       )}
 
-      {removeTarget && (
+      {actionTarget && (
         <ConfirmDialog
-          title="Remove this team member?"
-          message={`${removeTarget.full_name} will no longer be able to log into the vendor portal for this business.`}
-          confirmLabel="Remove"
-          destructive
-          submitting={removing}
-          error={removeError}
-          onCancel={() => setRemoveTarget(null)}
-          onConfirm={handleRemove}
+          title={
+            actionTarget.action === "delete"
+              ? "Permanently delete this team member?"
+              : actionTarget.action === "deactivate"
+                ? "Deactivate this team member?"
+                : "Reactivate this team member?"
+          }
+          message={
+            actionTarget.action === "delete"
+              ? `This permanently removes ${actionTarget.member.full_name}'s access. This cannot be undone.`
+              : actionTarget.action === "deactivate"
+                ? `${actionTarget.member.full_name} will lose access immediately and won't be able to log in. You can reactivate them later.`
+                : `${actionTarget.member.full_name} will regain access and be able to log in again.`
+          }
+          confirmLabel={
+            actionTarget.action === "delete"
+              ? "Delete permanently"
+              : actionTarget.action === "deactivate"
+                ? "Deactivate"
+                : "Activate"
+          }
+          destructive={actionTarget.action !== "restore"}
+          submitting={actionSubmitting}
+          error={actionError}
+          onCancel={() => setActionTarget(null)}
+          onConfirm={handleConfirmAction}
         />
       )}
     </div>

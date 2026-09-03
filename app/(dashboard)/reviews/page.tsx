@@ -5,6 +5,8 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 import {
   getReviewsApi,
   updateReviewStatusApi,
+  deactivateReviewApi,
+  restoreReviewApi,
   deleteReviewApi,
 } from "@/services/reviews-admin.service";
 import type { AdminReviewListItem } from "@/types/reviews-admin.types";
@@ -44,6 +46,8 @@ function StarRating({ value }: { value: number | null }) {
   );
 }
 
+type ReviewAction = "deactivate" | "restore" | "delete";
+
 export default function ReviewsPage() {
   const { token } = useAdminAuth();
   const [items, setItems] = useState<AdminReviewListItem[]>([]);
@@ -62,11 +66,12 @@ export default function ReviewsPage() {
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
-  const [deleteTarget, setDeleteTarget] = useState<AdminReviewListItem | null>(
-    null,
-  );
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [actionTarget, setActionTarget] = useState<{
+    review: AdminReviewListItem;
+    action: ReviewAction;
+  } | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(
     async (targetPage: number, reset: boolean) => {
@@ -152,24 +157,39 @@ export default function ReviewsPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!deleteTarget || !token) return;
-    setDeleting(true);
-    setDeleteError(null);
+  async function handleConfirmAction() {
+    if (!actionTarget || !token) return;
+    setActionSubmitting(true);
+    setActionError(null);
     try {
-      const res = await deleteReviewApi(token, deleteTarget.id);
+      let res;
+      if (actionTarget.action === "deactivate") {
+        res = await deactivateReviewApi(token, actionTarget.review.id);
+      } else if (actionTarget.action === "restore") {
+        res = await restoreReviewApi(token, actionTarget.review.id);
+      } else {
+        res = await deleteReviewApi(token, actionTarget.review.id);
+      }
       if (!res.success) {
-        setDeleteError(res.message || "Failed to delete review");
+        setActionError(res.message || "Action failed");
         return;
       }
-      setItems((prev) => prev.filter((r) => r.id !== deleteTarget.id));
-      setDeleteTarget(null);
+      if (actionTarget.action === "delete") {
+        setItems((prev) => prev.filter((r) => r.id !== actionTarget.review.id));
+      } else {
+        setItems((prev) =>
+          prev.map((r) =>
+            r.id === actionTarget.review.id
+              ? { ...r, is_active: actionTarget.action === "restore" }
+              : r,
+          ),
+        );
+      }
+      setActionTarget(null);
     } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete review",
-      );
+      setActionError(err instanceof Error ? err.message : "Action failed");
     } finally {
-      setDeleting(false);
+      setActionSubmitting(false);
     }
   }
 
@@ -230,6 +250,11 @@ export default function ReviewsPage() {
                   >
                     {r.moderation_status_label}
                   </span>
+                  {!r.is_active && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                      Inactive
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-font-dim mt-0.5">
                   {r.customer_name} • via {r.vendor_name}
@@ -252,10 +277,31 @@ export default function ReviewsPage() {
                   >
                     Change status
                   </button>
+                  {r.is_active ? (
+                    <button
+                      onClick={() => {
+                        setActionTarget({ review: r, action: "deactivate" });
+                        setActionError(null);
+                      }}
+                      className="text-xs font-bold text-orange-600"
+                    >
+                      Deactivate
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setActionTarget({ review: r, action: "restore" });
+                        setActionError(null);
+                      }}
+                      className="text-xs font-bold text-green-600"
+                    >
+                      Activate
+                    </button>
+                  )}
                   <button
                     onClick={() => {
-                      setDeleteTarget(r);
-                      setDeleteError(null);
+                      setActionTarget({ review: r, action: "delete" });
+                      setActionError(null);
                     }}
                     className="text-xs font-bold text-red-500"
                   >
@@ -337,16 +383,34 @@ export default function ReviewsPage() {
         </div>
       )}
 
-      {deleteTarget && (
+      {actionTarget && (
         <ConfirmDialog
-          title="Delete this review?"
-          message={`This permanently removes ${deleteTarget.customer_name}'s review of ${deleteTarget.vehicle_name}. This can't be undone.`}
-          confirmLabel="Delete"
-          destructive
-          submitting={deleting}
-          error={deleteError}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
+          title={
+            actionTarget.action === "delete"
+              ? "Permanently delete this review?"
+              : actionTarget.action === "deactivate"
+                ? "Deactivate this review?"
+                : "Reactivate this review?"
+          }
+          message={
+            actionTarget.action === "delete"
+              ? `This permanently removes ${actionTarget.review.customer_name}'s review of ${actionTarget.review.vehicle_name}. This cannot be undone.`
+              : actionTarget.action === "deactivate"
+                ? `This review will be hidden and excluded from ratings. You can reactivate it later.`
+                : `This review will become visible and count toward ratings again.`
+          }
+          confirmLabel={
+            actionTarget.action === "delete"
+              ? "Delete permanently"
+              : actionTarget.action === "deactivate"
+                ? "Deactivate"
+                : "Activate"
+          }
+          destructive={actionTarget.action !== "restore"}
+          submitting={actionSubmitting}
+          error={actionError}
+          onCancel={() => setActionTarget(null)}
+          onConfirm={handleConfirmAction}
         />
       )}
     </div>

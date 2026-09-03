@@ -38,3 +38,21 @@ export async function deleteReviewApi(
 ): Promise<ApiResponse<null>> {
   return api.delete(`/api/vehicles/admin/reviews/${id}/`, { token });
 }
+
+export async function deactivateReviewApi(
+  token: string,
+  id: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vehicles/admin/reviews/${id}/deactivate/`,
+    {},
+    { token },
+  );
+}
+
+export async function restoreReviewApi(
+  token: string,
+  id: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(`/api/vehicles/admin/reviews/${id}/restore/`, {}, { token });
+}

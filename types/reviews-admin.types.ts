@@ -9,6 +9,7 @@ export interface AdminReviewListItem {
   moderation_status: "PENDING" | "APPROVED" | "REMOVED" | "FLAGGED";
   moderation_status_label: string;
   created_at: string;
+  is_active: boolean;
 }
 
 export interface AdminReviewRating {

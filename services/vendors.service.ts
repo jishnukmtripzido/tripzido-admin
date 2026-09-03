@@ -207,3 +207,24 @@ export async function removeVendorTeamMemberApi(
 ): Promise<ApiResponse<null>> {
   return api.delete(`/api/vendors/admin/team/${memberId}/`, { token });
 }
+
+export async function deactivateVendorTeamMemberApi(
+  token: string,
+  memberId: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vendors/admin/team/${memberId}/deactivate/`,
+    {},
+    { token },
+  );
+}
+export async function restoreVendorTeamMemberApi(
+  token: string,
+  memberId: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vendors/admin/team/${memberId}/restore/`,
+    {},
+    { token },
+  );
+}

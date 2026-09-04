@@ -6,7 +6,7 @@ export async function getNotificationsApi(
   page: number = 1,
   unreadOnly: boolean = false,
 ) {
-  const params = new URLSearchParams({ page: String(page) });
+  const params = new URLSearchParams({ page: String(page), portal: "ADMIN" });
   if (unreadOnly) params.set("unread_only", "true");
   return api.get<{
     success: boolean;
@@ -20,7 +20,7 @@ export async function getUnreadNotificationCountApi(token: string) {
     success: boolean;
     message: string;
     data?: { count: number };
-  }>("/api/notifications/unread-count/", { token });
+  }>("/api/notifications/unread-count/portal=ADMIN", { token });
 }
 
 export async function markNotificationReadApi(token: string, id: number) {

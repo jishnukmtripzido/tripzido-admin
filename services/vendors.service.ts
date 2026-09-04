@@ -174,6 +174,7 @@ export async function registerVendorApi(
     owner_name: string;
     address: string;
     gst_number: string;
+    existing_user_id?: number;
   },
 ): Promise<ApiResponse<VendorDetail>> {
   return api.post(`/api/vendors/admin/register/`, data, { token });

@@ -6,6 +6,29 @@ import type {
   StaffMember,
 } from "@/types/users-admin.types";
 
+export interface UserLookupResult {
+  status: "not_found" | "blocked" | "found_customer";
+  reason?: string;
+  conflicting_role?: string;
+  user?: {
+    id: number;
+    full_name: string;
+    phone_number: string;
+    email: string;
+    created_at: string;
+  };
+}
+
+export async function lookupUserApi(
+  token: string,
+  params: { phone_number?: string; email?: string },
+): Promise<ApiResponse<UserLookupResult>> {
+  const search = new URLSearchParams();
+  if (params.phone_number) search.set("phone_number", params.phone_number);
+  if (params.email) search.set("email", params.email);
+  return api.get(`/api/users/admin/lookup/?${search.toString()}`, { token });
+}
+
 export async function getCustomersApi(
   token: string,
   page: number,
@@ -51,6 +74,7 @@ export async function createStaffApi(
     first_name: string;
     last_name: string;
     role: string;
+    existing_user_id?: number;
   },
 ): Promise<ApiResponse<StaffMember>> {
   return api.post(`/api/users/admin/staff/`, data, { token });

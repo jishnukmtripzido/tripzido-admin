@@ -423,6 +423,11 @@ export default function NewVendorPage() {
                 placeholder="Min 8 characters"
                 className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
               />
+              {password.length > 0 && password.length < 8 && (
+                <p className="text-xs text-red-500 mt-1">
+                  Password must be at least 8 characters.
+                </p>
+              )}
             </Field>
 
             <Field label="Address">

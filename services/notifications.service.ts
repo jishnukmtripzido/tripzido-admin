@@ -20,7 +20,7 @@ export async function getUnreadNotificationCountApi(token: string) {
     success: boolean;
     message: string;
     data?: { count: number };
-  }>("/api/notifications/unread-count/portal=ADMIN", { token });
+  }>("/api/notifications/unread-count/?portal=ADMIN", { token });
 }
 
 export async function markNotificationReadApi(token: string, id: number) {

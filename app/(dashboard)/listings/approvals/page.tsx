@@ -95,7 +95,8 @@ export default function ListingApprovalsPage() {
         {listings.map((l) => (
           <div
             key={l.id}
-            className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3"
+            onClick={() => router.push(`/listings/${l.id}`)}
+            className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3 cursor-pointer hover:border-gray-200 transition-colors"
           >
             <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
               {l.vehicle_type_image ? (
@@ -110,24 +111,24 @@ export default function ListingApprovalsPage() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <button
-                onClick={() => router.push(`/listings/${l.id}`)}
-                className="font-heading font-bold text-sm hover:text-brand-yellow-lg truncate block"
-              >
+              <p className="font-heading font-bold text-sm truncate">
                 {l.vehicle_type_name}
-              </button>
+              </p>
               <p className="text-xs text-font-dim mt-0.5 truncate">
                 {l.vendor_name} • {l.location_name}
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div
+              className="flex gap-2 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
                 onClick={() => {
                   setActionTarget({ id: l.id, status: "REJECTED" });
                   setReason("");
                   setActionError(null);
                 }}
-                className="text-xs font-bold text-red-600 bg-red-50 px-3 py-2 rounded-lg"
+                className="text-xs cursor-pointer font-bold text-red-600 bg-red-50 px-3 py-2 rounded-lg"
               >
                 Reject
               </button>
@@ -137,7 +138,7 @@ export default function ListingApprovalsPage() {
                   setReason("");
                   setActionError(null);
                 }}
-                className="text-xs font-bold text-brand-secondary bg-brand-yellow px-3 py-2 rounded-lg"
+                className="text-xs cursor-pointer font-bold text-brand-secondary bg-brand-yellow px-3 py-2 rounded-lg"
               >
                 Approve
               </button>

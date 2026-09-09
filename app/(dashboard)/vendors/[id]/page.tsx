@@ -1,3 +1,4 @@
+// app/vendors/[id]/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -6,10 +7,19 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 import {
   getVendorDetailApi,
   updateVendorStatusApi,
+  updateVendorDetailsApi,
   getVendorDocumentsApi,
   reviewDocumentApi,
+  updateVendorDocumentApi,
+  uploadVendorDocumentApi,
+  restoreVendorDocumentApi,
+  deleteVendorDocumentApi,
   getVendorBankAccountsApi,
   reviewBankAccountApi,
+  updateVendorBankAccountApi,
+  createVendorBankAccountApi,
+  restoreVendorBankAccountApi,
+  deleteVendorBankAccountApi,
   getSubscriptionPlansApi,
   getVendorSubscriptionsApi,
   assignVendorSubscriptionApi,
@@ -51,6 +61,33 @@ const ACTION_LABELS: Record<string, string> = {
   BANNED: "Ban permanently",
 };
 
+const DOC_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "BUSINESS_REGISTRATION", label: "Business Registration" },
+  { value: "ID_PROOF", label: "ID Proof" },
+  { value: "GST_CERTIFICATE", label: "GST Certificate" },
+  { value: "OTHER", label: "Other" },
+];
+
+// KYC document upload constraints, enforced client-side here and
+// mirrored server-side (AdminVendorDocumentUploadSerializer /
+// AdminVendorDocumentUpdateSerializer) — this is a UX convenience,
+// not the source of truth.
+const DOC_FILE_ACCEPT = ".pdf,.png,.jpg,.jpeg";
+const DOC_FILE_EXTENSIONS = [".pdf", ".png", ".jpg", ".jpeg"];
+const DOC_FILE_MAX_BYTES = 50 * 1024 * 1024; // 50MB
+const DOC_FILE_HINT = "Accepted formats: PDF, PNG, JPEG • Max size: 50MB";
+
+function validateDocFile(file: File): string | null {
+  const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (!DOC_FILE_EXTENSIONS.includes(ext)) {
+    return "Only PDF, PNG, or JPEG files are allowed.";
+  }
+  if (file.size > DOC_FILE_MAX_BYTES) {
+    return "File must be 50MB or smaller.";
+  }
+  return null;
+}
+
 export default function VendorDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -60,6 +97,7 @@ export default function VendorDetailPage() {
   const [vendor, setVendor] = useState<VendorDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -108,11 +146,19 @@ export default function VendorDetailPage() {
             </h1>
             <p className="text-sm text-font-dim mt-1">{vendor.owner_name}</p>
           </div>
-          <span
-            className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_STYLES[vendor.status] ?? "bg-gray-100"}`}
-          >
-            {vendor.status_label}
-          </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs font-bold text-brand-yellow-lg"
+            >
+              Edit details
+            </button>
+            <span
+              className={`text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_STYLES[vendor.status] ?? "bg-gray-100"}`}
+            >
+              {vendor.status_label}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
@@ -156,6 +202,18 @@ export default function VendorDetailPage() {
         onUpdated={setVendor}
       />
       <TeamSection vendorId={vendor.id} token={token!} />
+
+      {editing && (
+        <EditVendorModal
+          vendor={vendor}
+          token={token!}
+          onClose={() => setEditing(false)}
+          onUpdated={(v) => {
+            setVendor(v);
+            setEditing(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -165,6 +223,113 @@ function Field({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs text-font-dim">{label}</p>
       <p className="font-medium">{value}</p>
+    </div>
+  );
+}
+
+// ── Edit vendor details ─────────────────────────────────────────────────
+
+function EditVendorModal({
+  vendor,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  vendor: VendorDetail;
+  token: string;
+  onClose: () => void;
+  onUpdated: (v: VendorDetail) => void;
+}) {
+  const [businessName, setBusinessName] = useState(vendor.business_name);
+  const [ownerName, setOwnerName] = useState(vendor.owner_name);
+  const [email, setEmail] = useState(vendor.email);
+  const [address, setAddress] = useState(vendor.address);
+  const [gstNumber, setGstNumber] = useState(vendor.gst_number);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await updateVendorDetailsApi(token, vendor.id, {
+        business_name: businessName,
+        owner_name: ownerName,
+        email,
+        address,
+        gst_number: gstNumber,
+      });
+      if (!res.success || !res.data) {
+        setError(res.message || "Failed to update");
+        return;
+      }
+      onUpdated(res.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">
+          Edit vendor details
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            placeholder="Business name"
+            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+          />
+          <input
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+            placeholder="Owner name"
+            className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+          />
+        </div>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <textarea
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          rows={2}
+          placeholder="Address"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm resize-none"
+        />
+        <input
+          value={gstNumber}
+          onChange={(e) => setGstNumber(e.target.value)}
+          placeholder="GST number (optional)"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+          >
+            {submitting ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -283,6 +448,11 @@ function StatusActions({
 }
 
 // ── Documents ─────────────────────────────────────────────────────────
+//
+// Deactivate has been removed from this page — admins can only Edit,
+// Delete (permanent), or Activate a document that was deactivated
+// previously (e.g. legacy data). Adding a new document is now possible
+// directly from this page, not just at registration.
 
 function DocumentsSection({
   vendorId,
@@ -293,6 +463,14 @@ function DocumentsSection({
 }) {
   const [docs, setDocs] = useState<VendorDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editTarget, setEditTarget] = useState<VendorDocument | null>(null);
+  const [actionTarget, setActionTarget] = useState<{
+    doc: VendorDocument;
+    action: "restore" | "delete";
+  } | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -325,11 +503,51 @@ function DocumentsSection({
     return res;
   }
 
+  async function handleConfirmAction() {
+    if (!actionTarget) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      let res;
+      if (actionTarget.action === "restore") {
+        res = await restoreVendorDocumentApi(token, actionTarget.doc.id);
+      } else {
+        res = await deleteVendorDocumentApi(token, actionTarget.doc.id);
+      }
+      if (!res.success) {
+        setActionError(res.message || "Action failed");
+        return;
+      }
+      if (actionTarget.action === "delete") {
+        setDocs((prev) => prev.filter((d) => d.id !== actionTarget.doc.id));
+      } else {
+        setDocs((prev) =>
+          prev.map((d) =>
+            d.id === actionTarget.doc.id ? { ...d, is_active: true } : d,
+          ),
+        );
+      }
+      setActionTarget(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActionSubmitting(false);
+    }
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-      <h2 className="font-heading font-bold text-sm mb-3">
-        KYC Documents ({docs.length})
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-heading font-bold text-sm">
+          KYC Documents ({docs.length})
+        </h2>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="text-xs font-bold text-brand-yellow-lg"
+        >
+          + Add document
+        </button>
+      </div>
       {loading ? (
         <p className="text-sm text-font-dim">Loading...</p>
       ) : docs.length === 0 ? (
@@ -337,9 +555,65 @@ function DocumentsSection({
       ) : (
         <div className="space-y-3">
           {docs.map((doc) => (
-            <DocumentRow key={doc.id} doc={doc} onReview={handleReview} />
+            <DocumentRow
+              key={doc.id}
+              doc={doc}
+              onReview={handleReview}
+              onEdit={() => setEditTarget(doc)}
+              onAction={(action) => {
+                setActionTarget({ doc, action });
+                setActionError(null);
+              }}
+            />
           ))}
         </div>
+      )}
+
+      {showAddForm && (
+        <AddDocumentModal
+          vendorId={vendorId}
+          token={token}
+          onClose={() => setShowAddForm(false)}
+          onAdded={(d) => {
+            setDocs((prev) => [d, ...prev]);
+            setShowAddForm(false);
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <EditDocumentModal
+          doc={editTarget}
+          token={token}
+          onClose={() => setEditTarget(null)}
+          onUpdated={(d) => {
+            setDocs((prev) => prev.map((x) => (x.id === d.id ? d : x)));
+            setEditTarget(null);
+          }}
+        />
+      )}
+
+      {actionTarget && (
+        <ConfirmDialog
+          title={
+            actionTarget.action === "delete"
+              ? "Permanently delete this document?"
+              : "Reactivate this document?"
+          }
+          message={
+            actionTarget.action === "delete"
+              ? "This permanently removes the document. This cannot be undone."
+              : "This document will be visible and active again."
+          }
+          confirmLabel={
+            actionTarget.action === "delete" ? "Delete permanently" : "Activate"
+          }
+          destructive={actionTarget.action === "delete"}
+          submitting={actionSubmitting}
+          error={actionError}
+          onCancel={() => setActionTarget(null)}
+          onConfirm={handleConfirmAction}
+        />
       )}
     </div>
   );
@@ -348,6 +622,8 @@ function DocumentsSection({
 function DocumentRow({
   doc,
   onReview,
+  onEdit,
+  onAction,
 }: {
   doc: VendorDocument;
   onReview: (
@@ -355,6 +631,8 @@ function DocumentRow({
     status: "VERIFIED" | "REJECTED",
     reason: string,
   ) => Promise<{ success: boolean; message?: string }>;
+  onEdit: () => void;
+  onAction: (action: "restore" | "delete") => void;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -383,7 +661,14 @@ function DocumentRow({
     <div className="border border-gray-100 rounded-xl p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold">{doc.doc_type_label}</p>
+          <p className="text-sm font-semibold flex items-center gap-2">
+            {doc.doc_type_label}
+            {!doc.is_active && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                Inactive
+              </span>
+            )}
+          </p>
           <a
             href={doc.file}
             target="_blank"
@@ -458,11 +743,245 @@ function DocumentRow({
           Reason: {doc.rejection_reason}
         </p>
       )}
+
+      <div className="flex gap-3 mt-2 pt-2 border-t border-gray-50">
+        <button
+          onClick={onEdit}
+          className="text-xs font-bold text-brand-yellow-lg"
+        >
+          Edit
+        </button>
+        {!doc.is_active && (
+          <button
+            onClick={() => onAction("restore")}
+            className="text-xs font-bold text-green-600"
+          >
+            Activate
+          </button>
+        )}
+        <button
+          onClick={() => onAction("delete")}
+          className="text-xs font-bold text-red-500"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddDocumentModal({
+  vendorId,
+  token,
+  onClose,
+  onAdded,
+}: {
+  vendorId: number;
+  token: string;
+  onClose: () => void;
+  onAdded: (d: VendorDocument) => void;
+}) {
+  const [docType, setDocType] = useState(DOC_TYPE_OPTIONS[0].value);
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (!file) {
+      setError("Please choose a file to upload.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await uploadVendorDocumentApi(token, vendorId, docType, file);
+      if (!res.success || !res.data) {
+        setError(res.message || "Failed to upload document");
+        return;
+      }
+      onAdded(res.data);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to upload document",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">Add document</h3>
+        <select
+          value={docType}
+          onChange={(e) => setDocType(e.target.value)}
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white"
+        >
+          {DOC_TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <div>
+          <p className="text-xs text-font-dim mb-1">File</p>
+          <input
+            type="file"
+            accept={DOC_FILE_ACCEPT}
+            onChange={(e) => {
+              const selected = e.target.files?.[0] ?? null;
+              if (!selected) {
+                setFile(null);
+                return;
+              }
+              const validationError = validateDocFile(selected);
+              if (validationError) {
+                setError(validationError);
+                setFile(null);
+                e.target.value = "";
+                return;
+              }
+              setError(null);
+              setFile(selected);
+            }}
+            className="w-full text-sm"
+          />
+          <p className="text-[11px] text-font-dim mt-1">{DOC_FILE_HINT}</p>
+        </div>
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !file}
+            className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+          >
+            {submitting ? "Uploading..." : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditDocumentModal({
+  doc,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  doc: VendorDocument;
+  token: string;
+  onClose: () => void;
+  onUpdated: (d: VendorDocument) => void;
+}) {
+  const [docType, setDocType] = useState(doc.doc_type);
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await updateVendorDocumentApi(token, doc.id, {
+        doc_type: docType !== doc.doc_type ? docType : undefined,
+        file: file ?? undefined,
+      });
+      if (!res.success || !res.data) {
+        setError(res.message || "Failed to update");
+        return;
+      }
+      onUpdated(res.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">Edit document</h3>
+        <select
+          value={docType}
+          onChange={(e) => setDocType(e.target.value)}
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white"
+        >
+          {DOC_TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <div>
+          <p className="text-xs text-font-dim mb-1">Replace file (optional)</p>
+          <input
+            type="file"
+            accept={DOC_FILE_ACCEPT}
+            onChange={(e) => {
+              const selected = e.target.files?.[0] ?? null;
+              if (!selected) {
+                setFile(null);
+                return;
+              }
+              const validationError = validateDocFile(selected);
+              if (validationError) {
+                setError(validationError);
+                setFile(null);
+                e.target.value = "";
+                return;
+              }
+              setError(null);
+              setFile(selected);
+            }}
+            className="w-full text-sm"
+          />
+          <p className="text-[11px] text-font-dim mt-1">{DOC_FILE_HINT}</p>
+        </div>
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+          >
+            {submitting ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Bank accounts ─────────────────────────────────────────────────────
+//
+// Deactivate has been removed here too. A vendor can have more than one
+// bank account on file: adding a new one always saves it as a brand-new
+// record and — same as the existing verify flow — automatically becomes
+// the active payout account, superseding whichever one was active
+// before (this cascade already lives in the BankAccount model's save()
+// override on the backend). The main list therefore only ever shows the
+// current active account plus anything still awaiting review; every
+// other record (rejected, superseded, previously active) is one tap
+// away in the "View previous" popup rather than cluttering the main view.
 
 function BankAccountsSection({
   vendorId,
@@ -473,6 +992,15 @@ function BankAccountsSection({
 }) {
   const [accounts, setAccounts] = useState<VendorBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [editTarget, setEditTarget] = useState<VendorBankAccount | null>(null);
+  const [actionTarget, setActionTarget] = useState<{
+    account: VendorBankAccount;
+    action: "restore" | "delete";
+  } | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -498,25 +1026,151 @@ function BankAccountsSection({
     return res;
   }
 
+  async function handleConfirmAction() {
+    if (!actionTarget) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      let res;
+      if (actionTarget.action === "restore") {
+        res = await restoreVendorBankAccountApi(token, actionTarget.account.id);
+      } else {
+        res = await deleteVendorBankAccountApi(token, actionTarget.account.id);
+      }
+      if (!res.success) {
+        setActionError(res.message || "Action failed");
+        return;
+      }
+      if (actionTarget.action === "delete") {
+        setAccounts((prev) =>
+          prev.filter((a) => a.id !== actionTarget.account.id),
+        );
+      } else {
+        setAccounts((prev) =>
+          prev.map((a) =>
+            a.id === actionTarget.account.id ? { ...a, is_active: true } : a,
+          ),
+        );
+      }
+      setActionTarget(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActionSubmitting(false);
+    }
+  }
+
+  // Shown inline: the current active payout account, plus anything the
+  // vendor submitted that's still waiting on a decision.
+  const primaryAccounts = accounts.filter(
+    (a) => a.is_active && (a.is_active_acc || a.status === "PENDING"),
+  );
+  // Everything else — rejected, superseded, or previously deactivated —
+  // is tucked away behind "View previous".
+  const historyAccounts = accounts.filter(
+    (a) => !primaryAccounts.some((p) => p.id === a.id),
+  );
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-      <h2 className="font-heading font-bold text-sm mb-3">
-        Bank Accounts ({accounts.length})
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-heading font-bold text-sm">Bank Accounts</h2>
+        <div className="flex items-center gap-3">
+          {historyAccounts.length > 0 && (
+            <button
+              onClick={() => setShowHistory(true)}
+              className="text-xs font-bold text-font-dim underline"
+            >
+              View previous ({historyAccounts.length})
+            </button>
+          )}
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="text-xs font-bold text-brand-yellow-lg"
+          >
+            + Add account
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <p className="text-sm text-font-dim">Loading...</p>
-      ) : accounts.length === 0 ? (
-        <p className="text-sm text-font-dim">No bank account submitted yet.</p>
+      ) : primaryAccounts.length === 0 ? (
+        <p className="text-sm text-font-dim">No active bank account on file.</p>
       ) : (
         <div className="space-y-3">
-          {accounts.map((acc) => (
+          {primaryAccounts.map((acc) => (
             <BankAccountRow
               key={acc.id}
               account={acc}
               onReview={handleReview}
+              onEdit={() => setEditTarget(acc)}
+              onAction={(action) => {
+                setActionTarget({ account: acc, action });
+                setActionError(null);
+              }}
             />
           ))}
         </div>
+      )}
+
+      {showAddForm && (
+        <AddBankAccountModal
+          vendorId={vendorId}
+          token={token}
+          onClose={() => setShowAddForm(false)}
+          onAdded={() => {
+            setShowAddForm(false);
+            load();
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <EditBankAccountModal
+          account={editTarget}
+          token={token}
+          onClose={() => setEditTarget(null)}
+          onUpdated={() => {
+            setEditTarget(null);
+            load();
+          }}
+        />
+      )}
+
+      {showHistory && (
+        <BankAccountHistoryModal
+          accounts={historyAccounts}
+          onClose={() => setShowHistory(false)}
+          onAction={(account, action) => {
+            setShowHistory(false);
+            setActionTarget({ account, action });
+            setActionError(null);
+          }}
+        />
+      )}
+
+      {actionTarget && (
+        <ConfirmDialog
+          title={
+            actionTarget.action === "delete"
+              ? "Permanently delete this bank account?"
+              : "Reactivate this bank account?"
+          }
+          message={
+            actionTarget.action === "delete"
+              ? "This permanently removes the bank account. This cannot be undone."
+              : "This account becomes visible again. It won't automatically become the active payout account."
+          }
+          confirmLabel={
+            actionTarget.action === "delete" ? "Delete permanently" : "Activate"
+          }
+          destructive={actionTarget.action === "delete"}
+          submitting={actionSubmitting}
+          error={actionError}
+          onCancel={() => setActionTarget(null)}
+          onConfirm={handleConfirmAction}
+        />
       )}
     </div>
   );
@@ -525,6 +1179,8 @@ function BankAccountsSection({
 function BankAccountRow({
   account,
   onReview,
+  onEdit,
+  onAction,
 }: {
   account: VendorBankAccount;
   onReview: (
@@ -532,6 +1188,8 @@ function BankAccountRow({
     status: "VERIFIED" | "REJECTED",
     reason: string,
   ) => Promise<{ success: boolean; message?: string }>;
+  onEdit: () => void;
+  onAction: (action: "restore" | "delete") => void;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -560,7 +1218,14 @@ function BankAccountRow({
     <div className="border border-gray-100 rounded-xl p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold">{account.account_holder_name}</p>
+          <p className="text-sm font-semibold flex items-center gap-2">
+            {account.account_holder_name}
+            {!account.is_active && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                Inactive
+              </span>
+            )}
+          </p>
           <p className="text-xs text-font-dim">
             {account.bank_name || "—"} • {account.account_number_masked} •{" "}
             {account.ifsc_code}
@@ -569,7 +1234,7 @@ function BankAccountRow({
         <div className="flex items-center gap-2 shrink-0">
           {account.is_active_acc && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-              Active
+              Active Payout
             </span>
           )}
           <span
@@ -638,6 +1303,339 @@ function BankAccountRow({
           Reason: {account.rejection_reason}
         </p>
       )}
+
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-50">
+        <button
+          onClick={onEdit}
+          className="text-xs font-bold text-brand-yellow-lg"
+        >
+          Edit
+        </button>
+        {!account.is_active && (
+          <button
+            onClick={() => onAction("restore")}
+            className="text-xs font-bold text-green-600"
+          >
+            Activate
+          </button>
+        )}
+        {account.is_active_acc ? (
+          <span className="text-[11px] text-font-dim">
+            This is the active payout account — add a new one to replace it
+            before this can be deleted.
+          </span>
+        ) : (
+          <button
+            onClick={() => onAction("delete")}
+            className="text-xs font-bold text-red-500"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddBankAccountModal({
+  vendorId,
+  token,
+  onClose,
+  onAdded,
+}: {
+  vendorId: number;
+  token: string;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [holderName, setHolderName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit =
+    holderName.trim().length > 0 &&
+    accountNumber.trim().length > 0 &&
+    ifsc.trim().length > 0;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await createVendorBankAccountApi(token, vendorId, {
+        account_holder_name: holderName,
+        account_number: accountNumber,
+        ifsc_code: ifsc,
+        bank_name: bankName,
+      });
+      if (!res.success) {
+        setError(res.message || "Failed to add bank account");
+        return;
+      }
+      onAdded();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to add bank account",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">Add bank account</h3>
+        <p className="text-xs text-font-dim -mt-1">
+          Saved as a new record and set as the active payout account.
+        </p>
+        <input
+          value={holderName}
+          onChange={(e) => setHolderName(e.target.value)}
+          placeholder="Account holder name"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          value={accountNumber}
+          onChange={(e) => setAccountNumber(e.target.value)}
+          placeholder="Account number"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          value={ifsc}
+          onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+          placeholder="IFSC code"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          value={bankName}
+          onChange={(e) => setBankName(e.target.value)}
+          placeholder="Bank name (optional)"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !canSubmit}
+            className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+          >
+            {submitting ? "Adding..." : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BankAccountHistoryModal({
+  accounts,
+  onClose,
+  onAction,
+}: {
+  accounts: VendorBankAccount[];
+  onClose: () => void;
+  onAction: (account: VendorBankAccount, action: "restore" | "delete") => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="font-heading font-bold text-base">
+            Previous bank accounts
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-sm font-semibold text-font-dim"
+          >
+            Close
+          </button>
+        </div>
+        {accounts.length === 0 ? (
+          <p className="text-sm text-font-dim">No previous bank accounts.</p>
+        ) : (
+          <div className="space-y-3">
+            {accounts.map((acc) => {
+              // Every account in this list is, by definition, not the
+              // current active payout account. The backend's own
+              // status_label for VERIFIED literally reads "Verified –
+              // Active", which would misleadingly suggest otherwise here
+              // — so history gets its own wording instead of trusting it.
+              const historyBadge =
+                acc.status === "VERIFIED"
+                  ? {
+                      text: "Previously Active",
+                      className: "bg-gray-100 text-gray-600",
+                    }
+                  : acc.status === "REJECTED"
+                    ? { text: "Rejected", className: "bg-red-100 text-red-700" }
+                    : acc.status === "SUPERSEDED"
+                      ? {
+                          text: "Superseded",
+                          className: "bg-gray-100 text-gray-600",
+                        }
+                      : {
+                          text: acc.status_label,
+                          className: "bg-yellow-100 text-yellow-700",
+                        };
+
+              return (
+                <div
+                  key={acc.id}
+                  className="border border-gray-100 rounded-xl p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold flex items-center gap-2">
+                        {acc.account_holder_name}
+                        {!acc.is_active && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                            Inactive
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-font-dim">
+                        {acc.bank_name || "—"} • {acc.account_number_masked} •{" "}
+                        {acc.ifsc_code}
+                      </p>
+                      <p className="text-[10px] text-font-dim mt-0.5">
+                        Submitted{" "}
+                        {new Date(acc.submitted_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${historyBadge.className}`}
+                    >
+                      {historyBadge.text}
+                    </span>
+                  </div>
+                  <div className="flex gap-3 mt-2 pt-2 border-t border-gray-50">
+                    {!acc.is_active && (
+                      <button
+                        onClick={() => onAction(acc, "restore")}
+                        className="text-xs font-bold text-green-600"
+                      >
+                        Activate
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onAction(acc, "delete")}
+                      className="text-xs font-bold text-red-500"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditBankAccountModal({
+  account,
+  token,
+  onClose,
+  onUpdated,
+}: {
+  account: VendorBankAccount;
+  token: string;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [holderName, setHolderName] = useState(account.account_holder_name);
+  const [accountNumber, setAccountNumber] = useState(
+    account.account_number_masked,
+  );
+  const [ifsc, setIfsc] = useState(account.ifsc_code);
+  const [bankName, setBankName] = useState(account.bank_name);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await updateVendorBankAccountApi(token, account.id, {
+        account_holder_name: holderName,
+        account_number: accountNumber,
+        ifsc_code: ifsc,
+        bank_name: bankName,
+      });
+      if (!res.success) {
+        setError(res.message || "Failed to update");
+        return;
+      }
+      onUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
+        <h3 className="font-heading font-bold text-base">Edit bank account</h3>
+        <input
+          value={holderName}
+          onChange={(e) => setHolderName(e.target.value)}
+          placeholder="Account holder name"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          value={accountNumber}
+          onChange={(e) => setAccountNumber(e.target.value)}
+          placeholder="Account number"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          value={ifsc}
+          onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+          placeholder="IFSC code"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        <input
+          value={bankName}
+          onChange={(e) => setBankName(e.target.value)}
+          placeholder="Bank name (optional)"
+          className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm"
+        />
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-font-dim"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="flex-1 rounded-xl py-3 text-sm font-bold bg-brand-yellow text-brand-secondary disabled:opacity-50"
+          >
+            {submitting ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

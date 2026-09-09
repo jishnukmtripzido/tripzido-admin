@@ -61,6 +61,7 @@ export interface VendorDocument {
   reviewed_by_name: string | null;
   reviewed_at: string | null;
   created_at: string;
+  is_active: boolean;
 }
 
 export interface VendorBankAccount {
@@ -77,6 +78,7 @@ export interface VendorBankAccount {
   verified_by_name: string | null;
   verified_at: string | null;
   submitted_at: string;
+  is_active: boolean;
 }
 
 export interface VendorCommission {
@@ -154,4 +156,15 @@ export interface VendorTeamMember {
   added_at: string;
   added_by_name: string | null;
   is_active: boolean;
+}
+
+export interface VendorRegistrationExtras {
+  kycFile?: File | null;
+  kycDocType?: string;
+  bankAccountHolderName?: string;
+  bankAccountNumber?: string;
+  bankIfscCode?: string;
+  bankName?: string;
+  branchName?: string;
+  subscriptionPlanId?: number | null;
 }

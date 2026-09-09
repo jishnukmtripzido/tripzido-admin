@@ -21,9 +21,19 @@ async function request<T>(
     revalidate,
     timeout = 30000,
   } = options;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+
+  const isFormData = body instanceof FormData;
+
+  const headers: Record<string, string> = {};
+  // FormData needs the BROWSER to set its own Content-Type header
+  // (multipart/form-data; boundary=...) — setting it manually here
+  // would omit the boundary the server needs to parse the body at
+  // all. Every existing JSON-body caller across both portals still
+  // gets the header set exactly as before; this only changes
+  // behavior when body is genuinely a FormData instance.
+  if (!isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const controller = new AbortController();
@@ -33,7 +43,11 @@ async function request<T>(
     const res = await fetch(process.env.NEXT_PUBLIC_API_URL + endpoint, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData
+        ? (body as FormData)
+        : body
+          ? JSON.stringify(body)
+          : undefined,
       cache: revalidate ? "force-cache" : cache,
       next: revalidate ? { revalidate } : undefined,
       signal: controller.signal,

@@ -44,6 +44,20 @@ export async function updateVendorStatusApi(
   );
 }
 
+export async function updateVendorDetailsApi(
+  token: string,
+  vendorId: number,
+  data: Partial<{
+    business_name: string;
+    owner_name: string;
+    email: string;
+    address: string;
+    gst_number: string;
+  }>,
+): Promise<ApiResponse<VendorDetail>> {
+  return api.patch(`/api/vendors/admin/vendors/${vendorId}/`, data, { token });
+}
+
 export async function getVendorDocumentsApi(
   token: string,
   vendorId: number,
@@ -66,6 +80,66 @@ export async function reviewDocumentApi(
   );
 }
 
+export async function uploadVendorDocumentApi(
+  token: string,
+  vendorId: number,
+  docType: string,
+  file: File,
+): Promise<ApiResponse<VendorDocument>> {
+  const formData = new FormData();
+  formData.append("doc_type", docType);
+  formData.append("file", file);
+  return api.post(
+    `/api/vendors/admin/vendors/${vendorId}/documents/`,
+    formData,
+    {
+      token,
+    },
+  );
+}
+
+export async function updateVendorDocumentApi(
+  token: string,
+  docId: number,
+  data: { doc_type?: string; file?: File },
+): Promise<ApiResponse<VendorDocument>> {
+  const formData = new FormData();
+  if (data.doc_type) formData.append("doc_type", data.doc_type);
+  if (data.file) formData.append("file", data.file);
+  return api.patch(`/api/vendors/admin/documents/${docId}/`, formData, {
+    token,
+  });
+}
+
+export async function deactivateVendorDocumentApi(
+  token: string,
+  docId: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vendors/admin/documents/${docId}/deactivate/`,
+    {},
+    { token },
+  );
+}
+
+export async function restoreVendorDocumentApi(
+  token: string,
+  docId: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vendors/admin/documents/${docId}/restore/`,
+    {},
+    { token },
+  );
+}
+
+export async function deleteVendorDocumentApi(
+  token: string,
+  docId: number,
+): Promise<ApiResponse<null>> {
+  return api.delete(`/api/vendors/admin/documents/${docId}/`, { token });
+}
+
 export async function getVendorBankAccountsApi(
   token: string,
   vendorId: number,
@@ -86,6 +160,73 @@ export async function reviewBankAccountApi(
     { status: newStatus, rejection_reason: rejectionReason },
     { token },
   );
+}
+
+export async function createVendorBankAccountApi(
+  token: string,
+  vendorId: number,
+  data: {
+    account_holder_name: string;
+    account_number: string;
+    ifsc_code: string;
+    bank_name?: string;
+    branch_name?: string;
+  },
+): Promise<ApiResponse<VendorBankAccount>> {
+  return api.post(
+    `/api/vendors/admin/vendors/${vendorId}/bank-accounts/`,
+    data,
+    {
+      token,
+    },
+  );
+}
+
+export async function updateVendorBankAccountApi(
+  token: string,
+  accountId: number,
+  data: Partial<{
+    account_holder_name: string;
+    account_number: string;
+    ifsc_code: string;
+    bank_name: string;
+    branch_name: string;
+  }>,
+): Promise<ApiResponse<VendorBankAccount>> {
+  return api.patch(`/api/vendors/admin/bank-accounts/${accountId}/`, data, {
+    token,
+  });
+}
+
+export async function deactivateVendorBankAccountApi(
+  token: string,
+  accountId: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vendors/admin/bank-accounts/${accountId}/deactivate/`,
+    {},
+    { token },
+  );
+}
+
+export async function restoreVendorBankAccountApi(
+  token: string,
+  accountId: number,
+): Promise<ApiResponse<null>> {
+  return api.patch(
+    `/api/vendors/admin/bank-accounts/${accountId}/restore/`,
+    {},
+    { token },
+  );
+}
+
+export async function deleteVendorBankAccountApi(
+  token: string,
+  accountId: number,
+): Promise<ApiResponse<null>> {
+  return api.delete(`/api/vendors/admin/bank-accounts/${accountId}/`, {
+    token,
+  });
 }
 
 export async function getCommissionsApi(

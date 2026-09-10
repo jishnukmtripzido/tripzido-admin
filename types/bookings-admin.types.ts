@@ -29,6 +29,7 @@ export interface AdminBookingCancellation {
   reason_code: string;
   reason_text: string;
   cancelled_by_role: string;
+  cancelled_by_name: string | null;
   hours_before_pickup_at_cancellation: string | null;
   refund_percentage: string;
   refundable_amount: string;
@@ -72,5 +73,6 @@ export interface AdminBookingDetail {
   cancelled_by_role: string;
   payments: AdminPaymentSummary[];
   cancellation: AdminBookingCancellation | null;
+  created_by_name: string | null;
   created_at: string;
 }

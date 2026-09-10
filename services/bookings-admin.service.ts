@@ -27,3 +27,21 @@ export async function getAdminBookingDetailApi(
 ): Promise<ApiResponse<AdminBookingDetail>> {
   return api.get(`/api/bookings/admin/bookings/${id}/`, { token });
 }
+
+export async function adminCancelBookingApi(
+  token: string,
+  bookingId: number,
+  reasonText: string,
+  refundPercentageOverride?: number,
+): Promise<ApiResponse<unknown>> {
+  return api.post(
+    `/api/bookings/admin/${bookingId}/cancel/`,
+    {
+      reason_text: reasonText,
+      ...(refundPercentageOverride !== undefined
+        ? { refund_percentage_override: refundPercentageOverride }
+        : {}),
+    },
+    { token },
+  );
+}

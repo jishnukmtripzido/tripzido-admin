@@ -296,7 +296,7 @@ export default function AdminBookingDetailPage() {
                 </p>
                 <p className="text-xs text-font-dim">{p.gateway_order_id}</p>
               </div>
-              <p className="font-bold text-brand-secondary">₹{p.amount}</p>
+              {/* <p className="font-bold text-brand-secondary">₹{p.amount}</p> */}
             </div>
           ))}
           {booking.payments.length === 0 && (

@@ -86,7 +86,7 @@ async function submitCityForm(
     if (value === null || value === undefined || value === "") return;
     formData.append(key, value instanceof File ? value : String(value));
   });
-  const res = await fetch(`${process.env.API_URL}${url}`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${url}`, {
     method,
     headers: { Authorization: `Bearer ${token}` },
     body: formData,

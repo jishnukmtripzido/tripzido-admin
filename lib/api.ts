@@ -40,7 +40,7 @@ async function request<T>(
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await fetch(process.env.API_URL + endpoint, {
+    const res = await fetch(process.env.NEXT_PUBLIC_API_URL + endpoint, {
       method,
       headers,
       body: isFormData

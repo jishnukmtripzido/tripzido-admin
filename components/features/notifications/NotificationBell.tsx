@@ -83,7 +83,7 @@ export function NotificationBell() {
       <button
         onClick={handleOpen}
         aria-label="Notifications"
-        className="relative p-2 bg-gray-50 rounded-full border border-gray-100 text-gray-600 hover:text-brand-secondary transition-colors"
+        className="relative cursor-pointer p-2 bg-gray-50 rounded-full border border-gray-100 text-gray-600 hover:text-brand-secondary transition-colors"
       >
         <svg
           className="w-5 h-5"
